@@ -1,0 +1,71 @@
+Bootstrap: docker
+# Pre-built verl image with vLLM backend and all compiled dependencies
+# (Apex, TransformerEngine, flash_attn, DeepEP, Megatron-LM, etc.)
+# Change tag as needed — see https://hub.docker.com/r/verlai/verl/tags
+From: verlai/verl:vllm011.latest
+
+%labels
+    Author verl-apptainer
+    Description verl (tvpo branch) container for Alliance Canada clusters
+    Version 0.1
+
+%environment
+    # Avoid conda — Alliance Canada recommends pip/virtualenv only
+    export VLLM_USE_V1=1
+    export PIP_NO_CACHE_DIR=1
+
+%post
+    # ── System packages ──────────────────────────────────────────────
+    apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        wget \
+        vim \
+        && rm -rf /var/lib/apt/lists/*
+
+    # ── Remove any pre-installed verl so we can install the tvpo branch ──
+    pip uninstall -y verl 2>/dev/null || true
+
+    # ── Install verl from the tvpo branch (no-deps: base image has everything) ──
+    pip install --no-deps git+https://github.com/mnoukhov/verl.git@tvpo
+
+    # ── Sanity check ──
+    python -c "import verl; print('verl installed successfully')"
+
+%runscript
+    exec python "$@"
+
+%help
+    verl container (tvpo branch) for Alliance Canada HPC clusters.
+
+    == Building (on a login/build node with internet access) ==
+
+        apptainer build --fakeroot verl.sif verl.def
+
+    Or, directly from the pre-built Docker image without customisation:
+
+        apptainer build verl.sif docker://verlai/verl:vllm011.latest
+
+    == Running interactively ==
+
+        apptainer shell --nv verl.sif
+
+    == Running a script ==
+
+        apptainer exec --nv verl.sif python my_script.py
+
+    == SLURM job example ==
+
+        srun --gres=gpu:1 apptainer exec --nv verl.sif python my_script.py
+
+    == Bind-mounting local verl source (editable dev mode) ==
+
+        apptainer exec --nv -B /path/to/verl:/workspace/verl verl.sif \
+            bash -c "cd /workspace/verl && pip install --no-deps -e . && python ..."
+
+    == Alliance Canada notes ==
+
+    - Do NOT use Anaconda/conda inside this container. All packages are
+      installed via pip (per Alliance Canada policy).
+    - Use --nv to enable NVIDIA GPU support at runtime.
+    - Common bind mounts: -B $SCRATCH -B $SLURM_TMPDIR
+    - Build SIF on a login node or your local machine, not on compute nodes.
