@@ -1546,18 +1546,43 @@ def compute_policy_loss_tvpo(
     prob = torch.exp(log_prob)
     old_prob = torch.exp(old_log_prob)
 
-    pg_losses = -advantages * truncated_ratio * log_prob
-    pg_losses_detached = pg_losses.detach()
     if torch.all(prompt_tv_per_sample <= clip_divergence):
         valid_mask = torch.ones_like(pg_losses, dtype=torch.bool)
     else:
         main_grad = advantages
         ref_grad = torch.sign(prob - old_prob)
-        prompt_valid = prompt_tv_per_sample.unsqueeze(-1) <= clip_divergence
+        # prompt_valid = prompt_tv_per_sample.unsqueeze(-1) <= clip_divergence
         token_valid = (main_grad * ref_grad) <= 0
-        valid_mask = prompt_valid | token_valid
-        pg_losses = torch.where(valid_mask, pg_losses, pg_losses_detached)
+        # valid_mask = prompt_valid | token_valid
+        valid_mask = token_valid
     valid_mask = valid_mask.detach().float()
+
+    pg_losses = -advantages * truncated_ratio * log_prob * valid_mask
+
+
+    # if ppo_tv <= clip_divergence:
+    #     valid_mask = torch.ones_like(ppo_tv)
+    # else:
+    #     main_grad = advantages
+    #     ref_grad = torch.sign(prob - old_prob)
+    #     valid_mask = (main_grad * ref_grad) <= 0
+    # valid_mask = valid_mask.detach().float()
+
+    # pg_losses = -advantages * truncated_ratio * log_prob * valid_mask
+
+
+    # pg_losses = -advantages * truncated_ratio * log_prob
+    # pg_losses_detached = pg_losses.detach()
+    # if torch.all(prompt_tv_per_sample <= clip_divergence):
+    #     valid_mask = torch.ones_like(pg_losses, dtype=torch.bool)
+    # else:
+    #     main_grad = advantages
+    #     ref_grad = torch.sign(prob - old_prob)
+    #     prompt_valid = prompt_tv_per_sample.unsqueeze(-1) <= clip_divergence
+    #     token_valid = (main_grad * ref_grad) <= 0
+    #     valid_mask = prompt_valid | token_valid
+    #     pg_losses = torch.where(valid_mask, pg_losses, pg_losses_detached)
+    # valid_mask = valid_mask.detach().float()
 
     # Apply rollout correction weights if provided
     if rollout_is_weights is not None:
