@@ -113,7 +113,7 @@ overlong_penalty_factor=1.0
 
 train_batch_size=256
 ppo_mini_batch_size=32
-# ppo_micro_batch_size_per_gpu=1
+ppo_micro_batch_size_per_gpu=1
 n_resp_per_prompt=16
 n_resp_per_prompt_val=32
 
@@ -210,9 +210,9 @@ ACTOR_CONFIG="
     actor_rollout_ref.actor.policy_loss.loss_mode=${LOSS_MODE} \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
-    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu"
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu"
     
-#     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
 #     +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_offload_fraction=1 \
 #     +actor_rollout_ref.actor.optim.override_optimizer_config.overlap_cpu_optimizer_d2h_h2d=True \
 #     +actor_rollout_ref.actor.optim.override_optimizer_config.use_precision_aware_optimizer=True \
