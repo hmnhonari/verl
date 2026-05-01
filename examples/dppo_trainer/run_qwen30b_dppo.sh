@@ -90,9 +90,9 @@ project_name=Qwen3-30B-A3B-Base-dapo-math-17k
 wandb_project_name=verl
 experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-${current_seconds}"
 
-if [[ "$LOSS_MODE" == "tvpo" && "$clip_ratio" == "0.01" ]]; then
-        experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-1777430249"
-fi
+# if [[ "$LOSS_MODE" == "tvpo" && "$clip_ratio" == "0.01" ]]; then
+#         experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-1777430249"
+# fi
 
 # Paths
 DATA_ROOT=${DATA_ROOT:-"/home/h/homayoon/verl"}
@@ -113,7 +113,7 @@ overlong_penalty_factor=1.0
 
 train_batch_size=256
 ppo_mini_batch_size=32
-ppo_micro_batch_size_per_gpu=1
+# ppo_micro_batch_size_per_gpu=1
 n_resp_per_prompt=16
 n_resp_per_prompt_val=32
 
@@ -160,13 +160,20 @@ CRITIC_TP=${CRITIC_TP:-$TRAIN_TP}
 CRITIC_EP=${CRITIC_EP:-$COMMON_EP}
 CRITIC_ETP=${CRITIC_ETP:-$COMMON_ETP}
 
+TP_SIZE=2
+CP_SIZE=1
+PP_SIZE=1
+VPP_SIZE=null
+EP_SIZE=8
+ETP_SIZE=1
+
 ACTOR_MEGATRON_CONFIG="
-    actor_rollout_ref.actor.megatron.tensor_model_parallel_size=$ACTOR_TP \
-    actor_rollout_ref.actor.megatron.context_parallel_size=$ACTOR_CP \
-    actor_rollout_ref.actor.megatron.pipeline_model_parallel_size=$ACTOR_PP \
-    actor_rollout_ref.actor.megatron.virtual_pipeline_model_parallel_size=$ACTOR_VPP \
-    actor_rollout_ref.actor.megatron.expert_model_parallel_size=$ACTOR_EP \
-    actor_rollout_ref.actor.megatron.expert_tensor_parallel_size=$ACTOR_ETP \
+    actor_rollout_ref.actor.megatron.tensor_model_parallel_size=$TP_SIZE \
+    actor_rollout_ref.actor.megatron.context_parallel_size=$CP_SIZE \
+    actor_rollout_ref.actor.megatron.pipeline_model_parallel_size=$PP_SIZE \
+    actor_rollout_ref.actor.megatron.virtual_pipeline_model_parallel_size=$VPP_SIZE \
+    actor_rollout_ref.actor.megatron.expert_model_parallel_size=$EP_SIZE \
+    actor_rollout_ref.actor.megatron.expert_tensor_parallel_size=$ETP_SIZE \
     actor_rollout_ref.actor.megatron.param_offload=True \
     actor_rollout_ref.actor.megatron.grad_offload=True \
     actor_rollout_ref.actor.megatron.optimizer_offload=True \
@@ -178,6 +185,13 @@ ACTOR_MEGATRON_CONFIG="
     +actor_rollout_ref.actor.megatron.override_transformer_config.apply_rope_fusion=True \
     +actor_rollout_ref.actor.megatron.override_transformer_config.gradient_accumulation_fusion=True \
     actor_rollout_ref.actor.megatron.use_mbridge=True"
+
+    # actor_rollout_ref.actor.megatron.tensor_model_parallel_size=$ACTOR_TP \
+    # actor_rollout_ref.actor.megatron.context_parallel_size=$ACTOR_CP \
+    # actor_rollout_ref.actor.megatron.pipeline_model_parallel_size=$ACTOR_PP \
+    # actor_rollout_ref.actor.megatron.virtual_pipeline_model_parallel_size=$ACTOR_VPP \
+    # actor_rollout_ref.actor.megatron.expert_model_parallel_size=$ACTOR_EP \
+    # actor_rollout_ref.actor.megatron.expert_tensor_parallel_size=$ACTOR_ETP \
 
 # Actor model config
 ACTOR_CONFIG="
@@ -196,13 +210,15 @@ ACTOR_CONFIG="
     actor_rollout_ref.actor.policy_loss.loss_mode=${LOSS_MODE} \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
-    +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_offload_fraction=1 \
-    +actor_rollout_ref.actor.optim.override_optimizer_config.overlap_cpu_optimizer_d2h_h2d=True \
-    +actor_rollout_ref.actor.optim.override_optimizer_config.use_precision_aware_optimizer=True \
-    +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_cpu_offload=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu"
-#    actor_rollout_ref.actor.checkpoint.load_contents='["model"]'
+    
+#     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
+#     +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_offload_fraction=1 \
+#     +actor_rollout_ref.actor.optim.override_optimizer_config.overlap_cpu_optimizer_d2h_h2d=True \
+#     +actor_rollout_ref.actor.optim.override_optimizer_config.use_precision_aware_optimizer=True \
+#     +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_cpu_offload=True \
+#     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu
+# #    actor_rollout_ref.actor.checkpoint.load_contents='["model"]'
 
 # Critic model config
 CIRITC_CONFIG="
@@ -213,24 +229,25 @@ CIRITC_CONFIG="
     critic.ulysses_sequence_parallel_size=$USP_SIZE"
 
 CRITIC_FSDP_CONFIG="${ACTOR_FSDP_CONFIG//actor_rollout_ref.actor/critic.model}"
-CRITIC_MEGATRON_CONFIG="
-    critic.megatron.tensor_model_parallel_size=$CRITIC_TP \
-    critic.megatron.context_parallel_size=$CRITIC_CP \
-    critic.megatron.pipeline_model_parallel_size=$CRITIC_PP \
-    critic.megatron.virtual_pipeline_model_parallel_size=$CRITIC_VPP \
-    critic.megatron.expert_model_parallel_size=$CRITIC_EP \
-    critic.megatron.expert_tensor_parallel_size=$CRITIC_ETP \
-    critic.megatron.param_offload=True \
-    critic.megatron.grad_offload=True \
-    critic.megatron.optimizer_offload=True \
-    +critic.megatron.override_transformer_config.moe_router_dtype=fp32 \
-    +critic.megatron.override_transformer_config.moe_permute_fusion=True \
-    +critic.megatron.override_transformer_config.recompute_method=uniform \
-    +critic.megatron.override_transformer_config.recompute_granularity=full \
-    +critic.megatron.override_transformer_config.recompute_num_layers=1 \
-    +critic.megatron.override_transformer_config.apply_rope_fusion=True \
-    +critic.megatron.override_transformer_config.gradient_accumulation_fusion=True \
-    critic.megatron.use_mbridge=True"
+CRITIC_MEGATRON_CONFIG="${ACTOR_MEGATRON_CONFIG//actor_rollout_ref.actor/critic}"
+# CRITIC_MEGATRON_CONFIG="
+#     critic.megatron.tensor_model_parallel_size=$CRITIC_TP \
+#     critic.megatron.context_parallel_size=$CRITIC_CP \
+#     critic.megatron.pipeline_model_parallel_size=$CRITIC_PP \
+#     critic.megatron.virtual_pipeline_model_parallel_size=$CRITIC_VPP \
+#     critic.megatron.expert_model_parallel_size=$CRITIC_EP \
+#     critic.megatron.expert_tensor_parallel_size=$CRITIC_ETP \
+#     critic.megatron.param_offload=True \
+#     critic.megatron.grad_offload=True \
+#     critic.megatron.optimizer_offload=True \
+#     +critic.megatron.override_transformer_config.moe_router_dtype=fp32 \
+#     +critic.megatron.override_transformer_config.moe_permute_fusion=True \
+#     +critic.megatron.override_transformer_config.recompute_method=uniform \
+#     +critic.megatron.override_transformer_config.recompute_granularity=full \
+#     +critic.megatron.override_transformer_config.recompute_num_layers=1 \
+#     +critic.megatron.override_transformer_config.apply_rope_fusion=True \
+#     +critic.megatron.override_transformer_config.gradient_accumulation_fusion=True \
+#     critic.megatron.use_mbridge=True"
 
 if [[ $backend == "megatron" ]]; then
     CONFIG_NAME=ppo_megatron_trainer
