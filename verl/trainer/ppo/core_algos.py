@@ -1548,7 +1548,7 @@ def compute_policy_loss_tvpo(
 
 #    if torch.all(prompt_tv_per_sample <= clip_divergence):
     if ppo_tv <= clip_divergence:
-        valid_mask = torch.ones_like(pg_losses, dtype=torch.bool)
+        valid_mask = torch.ones_like(advantages, dtype=torch.bool)
     else:
         main_grad = advantages
         ref_grad = torch.sign(prob - old_prob)
