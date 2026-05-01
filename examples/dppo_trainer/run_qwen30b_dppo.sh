@@ -210,8 +210,15 @@ ACTOR_CONFIG="
     actor_rollout_ref.actor.policy_loss.loss_mode=${LOSS_MODE} \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
-    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu"
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
+    +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_offload_fraction=1 \
+    +actor_rollout_ref.actor.optim.override_optimizer_config.overlap_cpu_optimizer_d2h_h2d=True \
+    +actor_rollout_ref.actor.optim.override_optimizer_config.use_precision_aware_optimizer=True \
+    +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_cpu_offload=True \
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu"
+    # actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
+    # actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
+    # actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu "
     
 #     +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_offload_fraction=1 \
 #     +actor_rollout_ref.actor.optim.override_optimizer_config.overlap_cpu_optimizer_d2h_h2d=True \
@@ -331,8 +338,6 @@ python3 -m verl.trainer.main_ppo \
     trainer.val_before_train=False \
     trainer.log_val_generations=100 \
     trainer.save_freq=20 \
-    actor_rollout_ref.actor.checkpoint.load_contents=['model','extra','hf_model','optimizer'] \
-    actor_rollout_ref.actor.checkpoint.save_contents=['model','extra','hf_model','optimizer'] \
     trainer.max_actor_ckpt_to_keep=1 \
     trainer.max_critic_ckpt_to_keep=1 \
     trainer.resume_mode=auto \
@@ -343,3 +348,7 @@ python3 -m verl.trainer.main_ppo \
     $CIRITC_CONFIG \
     $ROLLOUT_CONFIG \
     $REWARD_CONFIG
+
+
+# actor_rollout_ref.actor.checkpoint.load_contents=['model','extra','hf_model','optimizer'] \
+# actor_rollout_ref.actor.checkpoint.save_contents=['model','extra','hf_model','optimizer'] \
