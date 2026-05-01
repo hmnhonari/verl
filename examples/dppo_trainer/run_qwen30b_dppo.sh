@@ -20,7 +20,7 @@ superior training stability and final performance compared to existing methods.
 DPPO paper: https://arxiv.org/pdf/2602.04879
 """
 
-LOSS_MODE=${LOSS_MODE:-"dppo_tv"}
+LOSS_MODE=${LOSS_MODE:-"tvpo"}
 
 if [[ $LOSS_MODE == "dppo_kl" ]]; then
     # The KL divergence threshold for DPPO.
@@ -39,7 +39,7 @@ elif [[ $LOSS_MODE == "vanilla" ]]; then
     clip_ratio_high=${CLIP_HIGH:-0.28}
 elif [[ $LOSS_MODE == "tvpo" ]]; then
     # GRPO baseline
-    clip_ratio=${CLIP_HIGH:-0.005}
+    clip_ratio=${CLIP_HIGH:-0.01}
     clip_ratio_low=${CLIP_LOW:-0.15}
     clip_ratio_high=${CLIP_HIGH:-0.005}
 else
@@ -84,15 +84,20 @@ critic_warmup=0
 NNODES=${NNODES:-1}
 
 # wandb
+current_seconds=$(date +%s)
 backend=megatron # fsdp, fsdp2, megatron
 project_name=Qwen3-30B-A3B-Base-dapo-math-17k
 wandb_project_name=verl
-experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}"
+experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-${current_seconds}"
+
+if [[ "$LOSS_MODE" == "tvpo" && "$clip_ratio" == "0.01" ]]; then
+        experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-1777430249"
+fi
 
 # Paths
-DATA_ROOT=${DATA_ROOT:-"/weka/oe-adapt-default/michaeln/verl"}
-CKPTS_DIR=${CKPTS_DIR:-"/weka/oe-adapt-default/allennlp/deletable_checkpoint_states/michaeln/${experiment_name}"}
-MODEL_PATH=${MODEL_PATH:-"/weka/oe-adapt-default/allennlp/.cache/hub/models--Qwen--Qwen3-30B-A3B-Base/snapshots/1b75feb79f60b8dc6c5bc769a898c206a1c6a4f9"}
+DATA_ROOT=${DATA_ROOT:-"/home/h/homayoon/verl"}
+CKPTS_DIR=${CKPTS_DIR:-"/scratch/h/homayoon/verl/ckpts/${project_name}/${experiment_name}"}
+MODEL_PATH=${MODEL_PATH:-"/scratch/h/homayoon/verl/models/Qwen3-30B-A3B-Base"}
 TRAIN_FILE=${TRAIN_FILE:-"${DATA_ROOT}/data/dapo-math-17k.parquet"}
 TEST_FILE=${TEST_FILE:-"${DATA_ROOT}/data/aime-2024.parquet"}
 
@@ -197,6 +202,7 @@ ACTOR_CONFIG="
     +actor_rollout_ref.actor.optim.override_optimizer_config.use_precision_aware_optimizer=True \
     +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_cpu_offload=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu"
+#    actor_rollout_ref.actor.checkpoint.load_contents='["model"]'
 
 # Critic model config
 CIRITC_CONFIG="
@@ -278,7 +284,7 @@ REWARD_CONFIG="
     +reward.reward_kwargs.overlong_buffer_cfg.log=False \
     +reward.reward_kwargs.max_resp_len=${max_response_length}"
 
-/usr/bin/python -m verl.trainer.main_ppo \
+python3 -m verl.trainer.main_ppo \
     --config-path=./config \
     --config-name=$CONFIG_NAME \
     algorithm.adv_estimator=$adv_estimator \
@@ -307,7 +313,12 @@ REWARD_CONFIG="
     trainer.nnodes=$NNODES \
     trainer.val_before_train=False \
     trainer.log_val_generations=100 \
-    trainer.save_freq=10 \
+    trainer.save_freq=20 \
+    actor_rollout_ref.actor.checkpoint.load_contents=['model','extra','hf_model','optimizer'] \
+    actor_rollout_ref.actor.checkpoint.save_contents=['model','extra','hf_model','optimizer'] \
+    trainer.max_actor_ckpt_to_keep=1 \
+    trainer.max_critic_ckpt_to_keep=1 \
+    trainer.resume_mode=auto \
     trainer.test_freq=10 \
     trainer.total_epochs=10 \
     trainer.total_training_steps=200 \
