@@ -1552,10 +1552,10 @@ def compute_policy_loss_tvpo(
     else:
         main_grad = advantages
         ref_grad = torch.sign(prob - old_prob)
-        # prompt_valid = prompt_tv_per_sample.unsqueeze(-1) <= clip_divergence
+        prompt_valid = prompt_tv_per_sample.unsqueeze(-1) <= clip_divergence
         token_valid = (main_grad * ref_grad) <= 0
-        # valid_mask = prompt_valid | token_valid
-        valid_mask = token_valid
+        valid_mask = prompt_valid | token_valid
+        # valid_mask = token_valid
     valid_mask = valid_mask.detach().float()
 
     pg_losses = -advantages * truncated_ratio * log_prob * valid_mask
