@@ -339,7 +339,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.nnodes=$NNODES \
     trainer.val_before_train=False \
     trainer.log_val_generations=100 \
-    trainer.save_freq=60 \
+    trainer.save_freq=50 \
     trainer.max_actor_ckpt_to_keep=1 \
     trainer.max_critic_ckpt_to_keep=1 \
     trainer.resume_mode=auto \
