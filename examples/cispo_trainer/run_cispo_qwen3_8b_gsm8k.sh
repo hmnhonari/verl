@@ -10,9 +10,11 @@ LOSS_MODE=${LOSS_MODE:-cispo}
 
 gsm8k_train_path=${TRAIN_FILE:-/home/h/homayoon/verl/data/gsm8k/train.parquet}
 gsm8k_test_path=${TEST_FILE:-/home/h/homayoon/verl/data/gsm8k/test.parquet}
+math_train_path=${MATH_TRAIN_FILE:-/home/h/homayoon/verl/data/math/train.parquet}
+math_test_path=${MATH_TEST_FILE:-/home/h/homayoon/verl/data/math/test.parquet}
 
-train_files="['$gsm8k_train_path']"
-test_files="['$gsm8k_test_path']"
+train_files="['$gsm8k_train_path', '$math_train_path']"
+test_files="['$gsm8k_test_path', '$math_test_path']"
 
 MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
 
