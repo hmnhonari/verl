@@ -181,6 +181,7 @@ ACTOR_MEGATRON_CONFIG="
     actor_rollout_ref.actor.megatron.expert_tensor_parallel_size=$ETP_SIZE \
     actor_rollout_ref.actor.megatron.param_offload=True \
     actor_rollout_ref.actor.megatron.grad_offload=True \
+    actor_rollout_ref.actor.megatron.dist_ckpt_optim_fully_reshardable=False \
     actor_rollout_ref.actor.megatron.optimizer_offload=True \
     +actor_rollout_ref.actor.megatron.override_transformer_config.moe_router_dtype=fp32 \
     +actor_rollout_ref.actor.megatron.override_transformer_config.moe_permute_fusion=True \
@@ -214,7 +215,6 @@ ACTOR_CONFIG="
     actor_rollout_ref.actor.calculate_entropy=True \
     actor_rollout_ref.actor.policy_loss.loss_mode=${LOSS_MODE} \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
-    actor_rollout_ref.actor.megatron.dist_ckpt_optim_fully_reshardable=False \
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu"
@@ -343,7 +343,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.max_actor_ckpt_to_keep=1 \
     trainer.max_critic_ckpt_to_keep=1 \
     trainer.resume_mode=auto \
-    trainer.test_freq=10 \
+    trainer.test_freq=5 \
     trainer.total_epochs=10 \
     trainer.total_training_steps=200 \
     $ACTOR_CONFIG \
