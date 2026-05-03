@@ -32,6 +32,11 @@ elif [[ $LOSS_MODE == "dppo_tv" ]]; then
     clip_ratio=0.15
     clip_ratio_low=${CLIP_LOW:-0.15}
     clip_ratio_high=${CLIP_HIGH:-0.15}
+elif [[ $LOSS_MODE == "cispo" ]]; then
+    # The TV divergence threshold for DPPO.
+    clip_ratio=0.15
+    clip_ratio_low=${CLIP_LOW:-10}
+    clip_ratio_high=${CLIP_HIGH:-0.2}
 elif [[ $LOSS_MODE == "vanilla" ]]; then
     # GRPO baseline
     clip_ratio=0.2
