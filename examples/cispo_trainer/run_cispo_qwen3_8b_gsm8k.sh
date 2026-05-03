@@ -55,7 +55,7 @@ case "$LOSS_MODE" in
 
   tvpo)
     # Preserved from examples/dppo_trainer/run_qwen30b_dppo.sh
-    CLIP_RATIO=${CLIP_HIGH:-0.01}
+    CLIP_RATIO=0.015
     CLIP_RATIO_LOW=${CLIP_LOW:-0.15}
     CLIP_RATIO_HIGH=${CLIP_HIGH:-0.005}
 
@@ -113,7 +113,7 @@ esac
 
 current_seconds=$(date +%s)
 PROJECT_NAME=${PROJECT_NAME:-verl_qwen3_8b_gsm8k_compare}
-EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_8b_${LOSS_MODE}_${current_seconds}}
+EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_8b_${LOSS_MODE}_clip${CLIP_RATIO}_${current_seconds}}
 
 CKPTS_DIR=${CKPTS_DIR:-"/scratch/h/homayoon/verl/ckpts/${PROJECT_NAME}/${EXPERIMENT_NAME}"}
 
