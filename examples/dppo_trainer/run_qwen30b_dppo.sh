@@ -44,7 +44,7 @@ elif [[ $LOSS_MODE == "vanilla" ]]; then
     clip_ratio_high=${CLIP_HIGH:-0.28}
 elif [[ $LOSS_MODE == "tvpo" ]]; then
     # GRPO baseline
-    clip_ratio=${CLIP_HIGH:-0.01}
+    clip_ratio=${CLIP_HIGH:-0.015}
     clip_ratio_low=${CLIP_LOW:-0.15}
     clip_ratio_high=${CLIP_HIGH:-0.005}
 else
@@ -93,7 +93,7 @@ current_seconds=$(date +%s)
 backend=megatron # fsdp, fsdp2, megatron
 project_name=Qwen3-30B-A3B-Base-dapo-math-17k
 wandb_project_name=verl
-experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-${current_seconds}"
+experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-clip${clip_ratio}-${current_seconds}"
 
 # if [[ "$LOSS_MODE" == "tvpo" && "$clip_ratio" == "0.01" ]]; then
 #         experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-1777430249"
