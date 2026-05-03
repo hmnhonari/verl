@@ -2,12 +2,12 @@
 
 #SBATCH --account=aip-gberseth
 #SBATCH --ntasks=1
-#SBATCH --gpus-per-node=h200:8
+#SBATCH --gpus-per-node=h100:4
 #SBATCH -o /scratch/h/homayoon/slurm-%j.out
 #SBATCH --time=1-00:00:00
 #SBATCH --nodes=1
 #SBATCH --mem=0
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=48
 
 module load apptainer/1.4.5
 module load httpproxy
@@ -28,7 +28,7 @@ apptainer_image_path=/scratch/h/homayoon/verl/verl.sif
 echo "Starting Ray head on $(hostname)"
 srun --nodes=1 --ntasks=1 \
    apptainer run --nv --bind $verl_workdir $apptainer_image_path \
-   ray start --head --port=6379 --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus=8 --block &
+   ray start --head --port=6379 --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus=4 --block &
 
 # Wait a moment for Ray to initialize
 sleep 10

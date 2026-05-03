@@ -29,7 +29,7 @@ ROLLOUT_TP=${ROLLOUT_TP:-2}
 ROLLOUT_GPU_MEMORY_UTILIZATION=${ROLLOUT_GPU_MEMORY_UTILIZATION:-0.6}
 ROLLOUT_N=${ROLLOUT_N:-5}
 
-N_GPUS_PER_NODE=${N_GPUS_PER_NODE:-8}
+N_GPUS_PER_NODE=${N_GPUS_PER_NODE:-4}
 NNODES=${NNODES:-1}
 SAVE_FREQ=${SAVE_FREQ:-60}
 TEST_FREQ=${TEST_FREQ:-5}
@@ -130,7 +130,6 @@ python3 -m verl.trainer.main_ppo \
     data.filter_overlong_prompts=True \
     data.truncation=error \
     actor_rollout_ref.model.path=${MODEL_PATH} \
-    actor_rollout_ref.model.torch_dtype=bfloat16 \
     actor_rollout_ref.actor.optim.lr=${ACTOR_LR} \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE} \
