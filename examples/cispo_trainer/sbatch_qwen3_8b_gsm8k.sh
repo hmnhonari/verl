@@ -5,7 +5,7 @@
 #SBATCH --gpus-per-node=h100:4
 #SBATCH -o /scratch/h/homayoon/slurm-%j.out
 #SBATCH --time=1-00:00:00
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --mem=0
 #SBATCH --cpus-per-task=48
 
@@ -26,7 +26,7 @@ apptainer_image_path=/scratch/h/homayoon/verl/verl.sif
 # --- Start Ray Head Node ---
 # On a single node, we just start the head. No need for IP detection or worker loops.
 echo "Starting Ray head on $(hostname)"
-srun --nodes=1 --ntasks=1 \
+srun --nodes=2 --ntasks=1 \
    apptainer run --nv --bind $verl_workdir $apptainer_image_path \
    ray start --head --port=6379 --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus=4 --block &
 
