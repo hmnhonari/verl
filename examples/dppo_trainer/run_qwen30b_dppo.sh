@@ -1,4 +1,4 @@
-# run Qwen3-30B-A3B-Base on dapo-math-17k dataset
+# run Qwen3 models on dapo-math-17k dataset
 set -x
 
 # ================================ DPPO Specific Parameters ===========================
@@ -90,22 +90,26 @@ NNODES=${NNODES:-1}
 
 MODEL_MODE=${MODEL_MODE:-8B}
 MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
+IS_MOE_MODEL=false
 if [[ "$MODEL_MODE" == "8B" ]]; then
   MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
 elif [[ "$MODEL_MODE" == "4B" ]]; then
   MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-4B-Base}
 elif [[ "$MODEL_MODE" == "30B" ]]; then
   MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-30B-A3B-Base}
+    IS_MOE_MODEL=true
 else
   echo "Invalid MODEL_MODE: ${MODEL_MODE}"
   echo "Expected one of: 8B, 4B, 30B"
   exit 1
 fi
 
+MODEL_NAME=$(basename "$MODEL_PATH")
+
 # wandb
 current_seconds=$(date +%s)
 backend=megatron # fsdp, fsdp2, megatron
-project_name=Qwen3-30B-A3B-Base-dapo-math-17k
+project_name=${PROJECT_NAME:-${MODEL_NAME}-dapo-math-17k}
 wandb_project_name=verl
 experiment_name="${MODEL_MODE}-${backend}-${NNODES}nodes-${LOSS_MODE}-clip${clip_ratio}-${current_seconds}"
 
@@ -182,27 +186,33 @@ TP_SIZE=2
 CP_SIZE=1
 PP_SIZE=1
 VPP_SIZE=null
-EP_SIZE=8
-ETP_SIZE=1
+EP_SIZE=${EP_SIZE:-8}
+ETP_SIZE=${ETP_SIZE:-1}
 
 ACTOR_MEGATRON_CONFIG="
     actor_rollout_ref.actor.megatron.tensor_model_parallel_size=$TP_SIZE \
     actor_rollout_ref.actor.megatron.context_parallel_size=$CP_SIZE \
     actor_rollout_ref.actor.megatron.pipeline_model_parallel_size=$PP_SIZE \
     actor_rollout_ref.actor.megatron.virtual_pipeline_model_parallel_size=$VPP_SIZE \
-    actor_rollout_ref.actor.megatron.expert_model_parallel_size=$EP_SIZE \
-    actor_rollout_ref.actor.megatron.expert_tensor_parallel_size=$ETP_SIZE \
     actor_rollout_ref.actor.megatron.param_offload=True \
     actor_rollout_ref.actor.megatron.grad_offload=True \
     actor_rollout_ref.actor.megatron.dist_ckpt_optim_fully_reshardable=False \
     actor_rollout_ref.actor.megatron.optimizer_offload=True \
-    +actor_rollout_ref.actor.megatron.override_transformer_config.moe_router_dtype=fp32 \
-    +actor_rollout_ref.actor.megatron.override_transformer_config.moe_permute_fusion=True \
     +actor_rollout_ref.actor.megatron.override_transformer_config.recompute_method=uniform \
     +actor_rollout_ref.actor.megatron.override_transformer_config.recompute_granularity=full \
     +actor_rollout_ref.actor.megatron.override_transformer_config.recompute_num_layers=1 \
     +actor_rollout_ref.actor.megatron.override_transformer_config.apply_rope_fusion=True \
-    +actor_rollout_ref.actor.megatron.override_transformer_config.gradient_accumulation_fusion=True \
+    +actor_rollout_ref.actor.megatron.override_transformer_config.gradient_accumulation_fusion=True"
+
+if [[ "$IS_MOE_MODEL" == "true" ]]; then
+    ACTOR_MEGATRON_CONFIG="$ACTOR_MEGATRON_CONFIG \
+    actor_rollout_ref.actor.megatron.expert_model_parallel_size=$EP_SIZE \
+    actor_rollout_ref.actor.megatron.expert_tensor_parallel_size=$ETP_SIZE \
+    +actor_rollout_ref.actor.megatron.override_transformer_config.moe_router_dtype=fp32 \
+    +actor_rollout_ref.actor.megatron.override_transformer_config.moe_permute_fusion=True"
+fi
+
+ACTOR_MEGATRON_CONFIG="$ACTOR_MEGATRON_CONFIG \
     actor_rollout_ref.actor.megatron.use_mbridge=True"
 
     # actor_rollout_ref.actor.megatron.tensor_model_parallel_size=$ACTOR_TP \
@@ -303,8 +313,14 @@ ROLLOUT_CONFIG="
     actor_rollout_ref.rollout.name=$rollout_name \
     actor_rollout_ref.rollout.mode=async \
     actor_rollout_ref.rollout.tensor_model_parallel_size=$infer_tp \
-    actor_rollout_ref.rollout.data_parallel_size=$infer_dp \
-    actor_rollout_ref.rollout.expert_parallel_size=$infer_ep \
+    actor_rollout_ref.rollout.data_parallel_size=$infer_dp"
+
+if [[ "$IS_MOE_MODEL" == "true" ]]; then
+    ROLLOUT_CONFIG="$ROLLOUT_CONFIG \
+    actor_rollout_ref.rollout.expert_parallel_size=$infer_ep"
+fi
+
+ROLLOUT_CONFIG="$ROLLOUT_CONFIG \
     actor_rollout_ref.rollout.gpu_memory_utilization=$gpu_memory_utilization \
     actor_rollout_ref.rollout.n=$n_resp_per_prompt \
     actor_rollout_ref.rollout.calculate_log_probs=True \
