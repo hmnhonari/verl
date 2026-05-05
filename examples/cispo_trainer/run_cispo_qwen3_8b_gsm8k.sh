@@ -22,15 +22,15 @@ test_path=${TEST_FILE:-"/home/h/homayoon/verl/data/aime-2024.parquet"}
 train_files="['$train_path']"
 test_files="['$test_path']"
 
-MODEL_MODE=${MODEL_MODE:-8b}
+MODEL_MODE=${MODEL_MODE:-8B}
 MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
-if [[ "$MODEL_MODE" == "8b" ]]; then
+if [[ "$MODEL_MODE" == "8B" ]]; then
   MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
-elif [[ "$MODEL_MODE" == "4b" ]]; then
+elif [[ "$MODEL_MODE" == "4B" ]]; then
   MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-4B-Base}
 else
   echo "Invalid MODEL_MODE: ${MODEL_MODE}"
-  echo "Expected one of: 8b, 4b"
+  echo "Expected one of: 8B, 4B"
   exit 1
 fi
 
@@ -128,8 +128,8 @@ case "$LOSS_MODE" in
 esac
 
 current_seconds=$(date +%s)
-PROJECT_NAME=${PROJECT_NAME:-verl_qwen3_8b_gsm8k_compare}
-EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_8b_${LOSS_MODE}_clip${CLIP_RATIO}_${current_seconds}}
+PROJECT_NAME=${PROJECT_NAME:-verl}
+EXPERIMENT_NAME=${EXPERIMENT_NAME:-${MODEL_MODE}_${LOSS_MODE}_clip${CLIP_RATIO}_${current_seconds}}
 
 CKPTS_DIR=${CKPTS_DIR:-"/scratch/h/homayoon/verl/ckpts/${PROJECT_NAME}/${EXPERIMENT_NAME}"}
 
