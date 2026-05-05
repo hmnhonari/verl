@@ -16,6 +16,7 @@ export WANDB_API_KEY=$(cat $HOME/.wandb_key)
 export WANDB_ENTITY=glen-berseth
 export HYDRA_FULL_ERROR=1
 export LOSS_MODE=tvpo
+export MODEL_MODE=8b
 
 # replace these information with your own
 verl_workdir=/home/h/homayoon/verl
