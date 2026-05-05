@@ -36,14 +36,19 @@ fi
 
 # Qwen3-8B-friendly defaults, based on examples/grpo_trainer/run_qwen3-8b.sh
 TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
-MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-1024}
+MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-2048}
 MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-8192}
 PPO_MINI_BATCH_SIZE=${PPO_MINI_BATCH_SIZE:-64}
-PPO_MICRO_BATCH_SIZE_PER_GPU=${PPO_MICRO_BATCH_SIZE_PER_GPU:-32}
+PPO_MICRO_BATCH_SIZE_PER_GPU=${PPO_MICRO_BATCH_SIZE_PER_GPU:-2}
 ROLLOUT_LOGPROB_MICRO_BATCH_SIZE=${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE:-32}
 ROLLOUT_TP=${ROLLOUT_TP:-2}
 ROLLOUT_GPU_MEMORY_UTILIZATION=${ROLLOUT_GPU_MEMORY_UTILIZATION:-0.7}
-ROLLOUT_N=${ROLLOUT_N:-8}
+ROLLOUT_N=${ROLLOUT_N:-16}
+n_resp_per_prompt_val=32
+
+enable_overlong_buffer=False
+overlong_buffer_len=$((1024 * 4))
+overlong_penalty_factor=1.0
 
 N_GPUS_PER_NODE=${N_GPUS_PER_NODE:-8}
 NNODES=${NNODES:-1}
@@ -127,6 +132,14 @@ case "$LOSS_MODE" in
     ;;
 esac
 
+REWARD_CONFIG="
+    reward.reward_manager.name=dapo \
+    +reward.reward_kwargs.overlong_buffer_cfg.enable=${enable_overlong_buffer} \
+    +reward.reward_kwargs.overlong_buffer_cfg.len=${overlong_buffer_len} \
+    +reward.reward_kwargs.overlong_buffer_cfg.penalty_factor=${overlong_penalty_factor} \
+    +reward.reward_kwargs.overlong_buffer_cfg.log=False \
+    +reward.reward_kwargs.max_resp_len=${MAX_RESPONSE_LENGTH}"
+
 current_seconds=$(date +%s)
 PROJECT_NAME=${PROJECT_NAME:-verl}
 EXPERIMENT_NAME=${EXPERIMENT_NAME:-${MODEL_MODE}_${LOSS_MODE}_clip${CLIP_RATIO}_${current_seconds}}
@@ -161,8 +174,12 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${ROLLOUT_TP} \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.gpu_memory_utilization=${ROLLOUT_GPU_MEMORY_UTILIZATION} \
-    actor_rollout_ref.rollout.val_kwargs.temperature=1 \
     actor_rollout_ref.rollout.n=${ROLLOUT_N} \
+    actor_rollout_ref.rollout.val_kwargs.do_sample=True \
+    actor_rollout_ref.rollout.val_kwargs.top_p=0.95 \
+    actor_rollout_ref.rollout.val_kwargs.top_k=-1 \
+    actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
+    actor_rollout_ref.rollout.val_kwargs.n=$n_resp_per_prompt_val"
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE} \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.use_kl_in_reward=${USE_KL_IN_REWARD} \
@@ -179,4 +196,5 @@ python3 -m verl.trainer.main_ppo \
     trainer.test_freq=${TEST_FREQ} \
     trainer.total_epochs=${TOTAL_EPOCHS} \
     "${EXTRA_ARGS[@]}" \
+    $REWARD_CONFIG \
     "$@"
