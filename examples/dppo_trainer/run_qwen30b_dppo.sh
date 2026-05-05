@@ -63,7 +63,7 @@ adv_estimator=grpo
 # This can not only save the computation cost, but also improve the training stability 
 # for both GRPO and DPPO by controlling the training-inference mismatch at a low level.
 # See Section 5.2 in https://arxiv.org/pdf/2602.04879 for more details.
-bypass_mode=True
+bypass_mode=False
 
 # We recommand using Dr.GRPO to remove the length and difficulty bias in original GRPO.
 # See Section 3.1 in https://arxiv.org/pdf/2503.20783 for more details.
@@ -102,10 +102,23 @@ experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-clip${clip_ratio}-${curr
 # Paths
 DATA_ROOT=${DATA_ROOT:-"/home/h/homayoon/verl"}
 CKPTS_DIR=${CKPTS_DIR:-"/scratch/h/homayoon/verl/ckpts/${project_name}/${experiment_name}"}
-MODEL_PATH=${MODEL_PATH:-"/scratch/h/homayoon/verl/models/Qwen3-30B-A3B-Base"}
+# MODEL_PATH=${MODEL_PATH:-"/scratch/h/homayoon/verl/models/Qwen3-30B-A3B-Base"}
 TRAIN_FILE=${TRAIN_FILE:-"${DATA_ROOT}/data/dapo-math-17k.parquet"}
 TEST_FILE=${TEST_FILE:-"${DATA_ROOT}/data/aime-2024.parquet"}
 
+MODEL_MODE=${MODEL_MODE:-8B}
+MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
+if [[ "$MODEL_MODE" == "8B" ]]; then
+  MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
+elif [[ "$MODEL_MODE" == "4B" ]]; then
+  MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-4B-Base}
+elif [[ "$MODEL_MODE" == "30B" ]]; then
+  MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-30B-A3B-Base}
+else
+  echo "Invalid MODEL_MODE: ${MODEL_MODE}"
+  echo "Expected one of: 8B, 4B, 30B"
+  exit 1
+fi
 
 actor_model_path=$MODEL_PATH
 critic_model_path=$MODEL_PATH
@@ -119,7 +132,7 @@ overlong_penalty_factor=1.0
 train_batch_size=256
 ppo_mini_batch_size=32
 ppo_micro_batch_size_per_gpu=1
-n_resp_per_prompt=16
+n_resp_per_prompt=8 ### was 16
 n_resp_per_prompt_val=32
 
 # ===================================== Training ======================================
@@ -298,8 +311,9 @@ ROLLOUT_CONFIG="
     actor_rollout_ref.rollout.val_kwargs.do_sample=True \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.95 \
     actor_rollout_ref.rollout.val_kwargs.top_k=-1 \
-    actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
+    actor_rollout_ref.rollout.val_kwargs.temperature=1  \
     actor_rollout_ref.rollout.val_kwargs.n=$n_resp_per_prompt_val"
+##### temperature was 0.7
 
 # ===================================== Reward =====================================
 REWARD_CONFIG="
