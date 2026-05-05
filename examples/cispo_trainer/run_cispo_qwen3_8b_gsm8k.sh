@@ -143,7 +143,7 @@ python3 -m verl.trainer.main_ppo \
     data.train_batch_size=${TRAIN_BATCH_SIZE} \
     data.max_prompt_length=${MAX_PROMPT_LENGTH} \
     data.max_response_length=${MAX_RESPONSE_LENGTH} \
-    data.filter_overlong_prompts=True \
+    data.filter_overlong_prompts=False \
     data.truncation=error \
     actor_rollout_ref.model.path=${MODEL_PATH} \
     actor_rollout_ref.actor.optim.lr=${ACTOR_LR} \
