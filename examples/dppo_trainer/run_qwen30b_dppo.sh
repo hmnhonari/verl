@@ -88,24 +88,6 @@ critic_warmup=0
 # Node Info
 NNODES=${NNODES:-1}
 
-# wandb
-current_seconds=$(date +%s)
-backend=megatron # fsdp, fsdp2, megatron
-project_name=Qwen3-30B-A3B-Base-dapo-math-17k
-wandb_project_name=verl
-experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-clip${clip_ratio}-${current_seconds}"
-
-# if [[ "$LOSS_MODE" == "tvpo" && "$clip_ratio" == "0.01" ]]; then
-#         experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-1777430249"
-# fi
-
-# Paths
-DATA_ROOT=${DATA_ROOT:-"/home/h/homayoon/verl"}
-CKPTS_DIR=${CKPTS_DIR:-"/scratch/h/homayoon/verl/ckpts/${project_name}/${experiment_name}"}
-# MODEL_PATH=${MODEL_PATH:-"/scratch/h/homayoon/verl/models/Qwen3-30B-A3B-Base"}
-TRAIN_FILE=${TRAIN_FILE:-"${DATA_ROOT}/data/dapo-math-17k.parquet"}
-TEST_FILE=${TEST_FILE:-"${DATA_ROOT}/data/aime-2024.parquet"}
-
 MODEL_MODE=${MODEL_MODE:-8B}
 MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
 if [[ "$MODEL_MODE" == "8B" ]]; then
@@ -119,6 +101,24 @@ else
   echo "Expected one of: 8B, 4B, 30B"
   exit 1
 fi
+
+# wandb
+current_seconds=$(date +%s)
+backend=megatron # fsdp, fsdp2, megatron
+project_name=Qwen3-30B-A3B-Base-dapo-math-17k
+wandb_project_name=verl
+experiment_name="${MODEL_MODE}-${backend}-${NNODES}nodes-${LOSS_MODE}-clip${clip_ratio}-${current_seconds}"
+
+# if [[ "$LOSS_MODE" == "tvpo" && "$clip_ratio" == "0.01" ]]; then
+#         experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-1777430249"
+# fi
+
+# Paths
+DATA_ROOT=${DATA_ROOT:-"/home/h/homayoon/verl"}
+CKPTS_DIR=${CKPTS_DIR:-"/scratch/h/homayoon/verl/ckpts/${project_name}/${experiment_name}"}
+# MODEL_PATH=${MODEL_PATH:-"/scratch/h/homayoon/verl/models/Qwen3-30B-A3B-Base"}
+TRAIN_FILE=${TRAIN_FILE:-"${DATA_ROOT}/data/dapo-math-17k.parquet"}
+TEST_FILE=${TEST_FILE:-"${DATA_ROOT}/data/aime-2024.parquet"}
 
 actor_model_path=$MODEL_PATH
 critic_model_path=$MODEL_PATH
