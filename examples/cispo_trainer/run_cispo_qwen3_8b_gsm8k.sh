@@ -36,13 +36,18 @@ fi
 
 # Qwen3-8B-friendly defaults, based on examples/grpo_trainer/run_qwen3-8b.sh
 TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
-MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-2048}
-MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-8192}
+# MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-2048}
+# MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-8192}
+# PPO_MINI_BATCH_SIZE=${PPO_MINI_BATCH_SIZE:-64}
+# PPO_MICRO_BATCH_SIZE_PER_GPU=${PPO_MICRO_BATCH_SIZE_PER_GPU:-2}
+MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-512}
+MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-1024}
 PPO_MINI_BATCH_SIZE=${PPO_MINI_BATCH_SIZE:-64}
-PPO_MICRO_BATCH_SIZE_PER_GPU=${PPO_MICRO_BATCH_SIZE_PER_GPU:-2}
+PPO_MICRO_BATCH_SIZE_PER_GPU=${PPO_MICRO_BATCH_SIZE_PER_GPU:-10}
+
 ROLLOUT_LOGPROB_MICRO_BATCH_SIZE=${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE:-32}
 ROLLOUT_TP=${ROLLOUT_TP:-2}
-ROLLOUT_GPU_MEMORY_UTILIZATION=${ROLLOUT_GPU_MEMORY_UTILIZATION:-0.7}
+ROLLOUT_GPU_MEMORY_UTILIZATION=${ROLLOUT_GPU_MEMORY_UTILIZATION:-0.6}
 ROLLOUT_N=${ROLLOUT_N:-16}
 n_resp_per_prompt_val=32
 
@@ -132,13 +137,13 @@ case "$LOSS_MODE" in
     ;;
 esac
 
-REWARD_CONFIG="
-    reward.reward_manager.name=dapo \
-    +reward.reward_kwargs.overlong_buffer_cfg.enable=${enable_overlong_buffer} \
-    +reward.reward_kwargs.overlong_buffer_cfg.len=${overlong_buffer_len} \
-    +reward.reward_kwargs.overlong_buffer_cfg.penalty_factor=${overlong_penalty_factor} \
-    +reward.reward_kwargs.overlong_buffer_cfg.log=False \
-    +reward.reward_kwargs.max_resp_len=${MAX_RESPONSE_LENGTH}"
+# REWARD_CONFIG="
+#     reward.reward_manager.name=dapo \
+#     +reward.reward_kwargs.overlong_buffer_cfg.enable=${enable_overlong_buffer} \
+#     +reward.reward_kwargs.overlong_buffer_cfg.len=${overlong_buffer_len} \
+#     +reward.reward_kwargs.overlong_buffer_cfg.penalty_factor=${overlong_penalty_factor} \
+#     +reward.reward_kwargs.overlong_buffer_cfg.log=False \
+#     +reward.reward_kwargs.max_resp_len=${MAX_RESPONSE_LENGTH}"
 
 current_seconds=$(date +%s)
 PROJECT_NAME=${PROJECT_NAME:-verl}
@@ -196,7 +201,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.test_freq=${TEST_FREQ} \
     trainer.total_epochs=${TOTAL_EPOCHS} \
     "${EXTRA_ARGS[@]}" \
-    $REWARD_CONFIG \
+    # $REWARD_CONFIG \
     # "${REWARD_CONFIG[@]}" \
     "$@"
 
