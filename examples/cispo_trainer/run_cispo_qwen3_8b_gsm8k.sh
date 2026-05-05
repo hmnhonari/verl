@@ -6,32 +6,48 @@ set -x
 #   tvpo       -> match examples/dppo_trainer/run_qwen30b_dppo.sh
 #   dppo_tv    -> match examples/dppo_trainer/run_qwen30b_dppo.sh
 #   vanilla    -> match examples/dppo_trainer/run_qwen30b_dppo.sh
-LOSS_MODE=${LOSS_MODE:-cispo}
+LOSS_MODE=${LOSS_MODE:-tvpo}
 
-gsm8k_train_path=${TRAIN_FILE:-/home/h/homayoon/verl/data/gsm8k/train.parquet}
-gsm8k_test_path=${TEST_FILE:-/home/h/homayoon/verl/data/gsm8k/test.parquet}
-math_train_path=${MATH_TRAIN_FILE:-/home/h/homayoon/verl/data/math/train.parquet}
-math_test_path=${MATH_TEST_FILE:-/home/h/homayoon/verl/data/math/test.parquet}
+# gsm8k_train_path=${TRAIN_FILE:-/home/h/homayoon/verl/data/gsm8k/train.parquet}
+# gsm8k_test_path=${TEST_FILE:-/home/h/homayoon/verl/data/gsm8k/test.parquet}
+# math_train_path=${MATH_TRAIN_FILE:-/home/h/homayoon/verl/data/math/train.parquet}
+# math_test_path=${MATH_TEST_FILE:-/home/h/homayoon/verl/data/math/test.parquet}
 
-train_files="['$gsm8k_train_path', '$math_train_path']"
-test_files="['$gsm8k_test_path', '$math_test_path']"
+# train_files="['$gsm8k_train_path', '$math_train_path']"
+# test_files="['$gsm8k_test_path', '$math_test_path']"
 
+train_path=${TRAIN_FILE:-"/home/h/homayoon/verl/data/dapo-math-17k.parquet"}
+test_path=${TEST_FILE:-"/home/h/homayoon/verl/data/aime-2024.parquet"}
+
+train_files="['$train_path']"
+test_files="['$test_path']"
+
+MODEL_MODE=${MODEL_MODE:-8b}
 MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
+if [[ "$MODEL_MODE" == "8b" ]]; then
+  MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
+elif [[ "$MODEL_MODE" == "4b" ]]; then
+  MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-4B-Base}
+else
+  echo "Invalid MODEL_MODE: ${MODEL_MODE}"
+  echo "Expected one of: 8b, 4b"
+  exit 1
+fi
 
 # Qwen3-8B-friendly defaults, based on examples/grpo_trainer/run_qwen3-8b.sh
-TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-1024}
-MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-512}
-MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-1024}
-PPO_MINI_BATCH_SIZE=${PPO_MINI_BATCH_SIZE:-256}
+TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
+MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-1024}
+MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-8192}
+PPO_MINI_BATCH_SIZE=${PPO_MINI_BATCH_SIZE:-64}
 PPO_MICRO_BATCH_SIZE_PER_GPU=${PPO_MICRO_BATCH_SIZE_PER_GPU:-32}
 ROLLOUT_LOGPROB_MICRO_BATCH_SIZE=${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE:-32}
 ROLLOUT_TP=${ROLLOUT_TP:-2}
-ROLLOUT_GPU_MEMORY_UTILIZATION=${ROLLOUT_GPU_MEMORY_UTILIZATION:-0.6}
-ROLLOUT_N=${ROLLOUT_N:-5}
+ROLLOUT_GPU_MEMORY_UTILIZATION=${ROLLOUT_GPU_MEMORY_UTILIZATION:-0.7}
+ROLLOUT_N=${ROLLOUT_N:-8}
 
 N_GPUS_PER_NODE=${N_GPUS_PER_NODE:-8}
 NNODES=${NNODES:-1}
-SAVE_FREQ=${SAVE_FREQ:-60}
+SAVE_FREQ=${SAVE_FREQ:-50}
 TEST_FREQ=${TEST_FREQ:-5}
 TOTAL_EPOCHS=${TOTAL_EPOCHS:-15}
 
@@ -91,7 +107,7 @@ case "$LOSS_MODE" in
     # Preserved from examples/dppo_trainer/run_qwen30b_dppo.sh
     CLIP_RATIO=0.2
     CLIP_RATIO_LOW=${CLIP_LOW:-0.2}
-    CLIP_RATIO_HIGH=${CLIP_HIGH:-0.28}
+    CLIP_RATIO_HIGH=${CLIP_HIGH:-0.2}
 
     USE_KL_LOSS=False
     EXTRA_ARGS+=(
@@ -145,6 +161,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${ROLLOUT_TP} \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.gpu_memory_utilization=${ROLLOUT_GPU_MEMORY_UTILIZATION} \
+    actor_rollout_ref.rollout.val_kwargs.temperature=1 \
     actor_rollout_ref.rollout.n=${ROLLOUT_N} \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE} \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
@@ -157,6 +174,8 @@ python3 -m verl.trainer.main_ppo \
     trainer.nnodes=${NNODES} \
     trainer.save_freq=${SAVE_FREQ} \
     trainer.default_local_dir=${CKPTS_DIR} \
+    trainer.max_actor_ckpt_to_keep=1 \
+    trainer.max_critic_ckpt_to_keep=1 \
     trainer.test_freq=${TEST_FREQ} \
     trainer.total_epochs=${TOTAL_EPOCHS} \
     "${EXTRA_ARGS[@]}" \
