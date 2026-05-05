@@ -91,13 +91,17 @@ NNODES=${NNODES:-1}
 MODEL_MODE=${MODEL_MODE:-8B}
 MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
 IS_MOE_MODEL=false
+DEFAULT_PPO_MICRO_BATCH_SIZE_PER_GPU=4
 if [[ "$MODEL_MODE" == "8B" ]]; then
   MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
+    DEFAULT_PPO_MICRO_BATCH_SIZE_PER_GPU=4
 elif [[ "$MODEL_MODE" == "4B" ]]; then
   MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-4B-Base}
+    DEFAULT_PPO_MICRO_BATCH_SIZE_PER_GPU=8
 elif [[ "$MODEL_MODE" == "30B" ]]; then
   MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-30B-A3B-Base}
     IS_MOE_MODEL=true
+    DEFAULT_PPO_MICRO_BATCH_SIZE_PER_GPU=1
 else
   echo "Invalid MODEL_MODE: ${MODEL_MODE}"
   echo "Expected one of: 8B, 4B, 30B"
@@ -135,7 +139,8 @@ overlong_penalty_factor=1.0
 
 train_batch_size=256
 ppo_mini_batch_size=32
-ppo_micro_batch_size_per_gpu=1
+# H200-friendly defaults for this launcher; override with PPO_MICRO_BATCH_SIZE_PER_GPU if needed.
+ppo_micro_batch_size_per_gpu=${PPO_MICRO_BATCH_SIZE_PER_GPU:-$DEFAULT_PPO_MICRO_BATCH_SIZE_PER_GPU}
 n_resp_per_prompt=8 ### was 16
 n_resp_per_prompt_val=32
 
