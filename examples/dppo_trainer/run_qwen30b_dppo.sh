@@ -63,7 +63,7 @@ adv_estimator=grpo
 # This can not only save the computation cost, but also improve the training stability 
 # for both GRPO and DPPO by controlling the training-inference mismatch at a low level.
 # See Section 5.2 in https://arxiv.org/pdf/2602.04879 for more details.
-bypass_mode=False
+bypass_mode=True
 
 # We recommand using Dr.GRPO to remove the length and difficulty bias in original GRPO.
 # See Section 3.1 in https://arxiv.org/pdf/2503.20783 for more details.
