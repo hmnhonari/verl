@@ -15,8 +15,10 @@ module load httpproxy
 export WANDB_API_KEY=$(cat $HOME/.wandb_key)
 export WANDB_ENTITY=glen-berseth
 export HYDRA_FULL_ERROR=1
-export LOSS_MODE=tvpo
-export MODEL_MODE=8B
+# export LOSS_MODE=tvpo
+# export MODEL_MODE=8B
+export LOSS_MODE=${1:-tvpo}
+export MODEL_MODE=${2:-8B}
 
 # replace these information with your own
 verl_workdir=/home/h/homayoon/verl

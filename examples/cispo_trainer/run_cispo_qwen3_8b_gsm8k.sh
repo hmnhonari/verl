@@ -179,7 +179,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.95 \
     actor_rollout_ref.rollout.val_kwargs.top_k=-1 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
-    actor_rollout_ref.rollout.val_kwargs.n=$n_resp_per_prompt_val"
+    actor_rollout_ref.rollout.val_kwargs.n=$n_resp_per_prompt_val \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE} \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.use_kl_in_reward=${USE_KL_IN_REWARD} \
@@ -197,4 +197,9 @@ python3 -m verl.trainer.main_ppo \
     trainer.total_epochs=${TOTAL_EPOCHS} \
     "${EXTRA_ARGS[@]}" \
     $REWARD_CONFIG \
+    # "${REWARD_CONFIG[@]}" \
     "$@"
+
+
+# $REWARD_CONFIG \
+    
