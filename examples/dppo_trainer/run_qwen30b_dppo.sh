@@ -44,7 +44,7 @@ elif [[ $LOSS_MODE == "vanilla" ]]; then
     clip_ratio_high=${CLIP_HIGH:-0.28}
 elif [[ $LOSS_MODE == "tvpo" ]]; then
     # GRPO baseline
-    clip_ratio=0.015
+    clip_ratio=${CLIP_RATIO:-0.015}
     clip_ratio_low=${CLIP_LOW:-0.15}
     clip_ratio_high=${CLIP_HIGH:-0.005}
 else
@@ -89,7 +89,11 @@ critic_warmup=0
 NNODES=${NNODES:-1}
 
 MODEL_MODE=${MODEL_MODE:-8B}
-MODEL_PATH=${MODEL_PATH:-/scratch/h/homayoon/verl/models/Qwen3-8B}
+# NOTE: do NOT pre-set MODEL_PATH here. The per-mode block below picks the right
+# default via ${MODEL_PATH:-...}; assigning it first makes those fallbacks
+# no-ops, so MODEL_MODE=30B would still load the dense Qwen3-8B and, with EP>1,
+# fail with "num_moe_experts must be non None to use expert-parallel". Leaving it
+# unset keeps an externally exported MODEL_PATH winning, else the mode default applies.
 IS_MOE_MODEL=false
 DEFAULT_PPO_MICRO_BATCH_SIZE_PER_GPU=4
 if [[ "$MODEL_MODE" == "8B" ]]; then
@@ -111,19 +115,24 @@ fi
 MODEL_NAME=$(basename "$MODEL_PATH")
 
 # wandb
-current_seconds=$(date +%s)
 backend=megatron # fsdp, fsdp2, megatron
 project_name=${PROJECT_NAME:-${MODEL_NAME}-dapo-math-17k}
 wandb_project_name=verl
-experiment_name="${MODEL_MODE}-${backend}-${NNODES}nodes-${LOSS_MODE}-clip${clip_ratio}-${current_seconds}"
-
-# if [[ "$LOSS_MODE" == "tvpo" && "$clip_ratio" == "0.01" ]]; then
-#         experiment_name="${backend}-${NNODES}nodes-${LOSS_MODE}-low${clip_ratio_low}-high${clip_ratio_high}-1777430249"
-# fi
+# Deterministic experiment name built from the run's defining values: model mode,
+# method (loss mode), and the clip ratio + high/low. No timestamp, so re-running
+# with the same values reuses the same checkpoint dir — trainer.resume_mode=auto
+# resumes it if it exists, or starts from scratch if it doesn't. Just set the
+# values (MODEL_MODE / LOSS_MODE / CLIP_RATIO / CLIP_HIGH / CLIP_LOW) to pick the
+# run. Export RESUME_EXPERIMENT_NAME to override the name explicitly.
+experiment_name="${RESUME_EXPERIMENT_NAME:-${MODEL_MODE}-${LOSS_MODE}-clip${clip_ratio}-high${clip_ratio_high}-low${clip_ratio_low}}"
 
 # Paths
 DATA_ROOT=${DATA_ROOT:-"/home/h/homayoon/verl"}
-CKPTS_DIR=${CKPTS_DIR:-"/scratch/h/homayoon/verl/ckpts/${project_name}/${experiment_name}"}
+# Checkpoint save + resume-load location. Kept on /project (persistent, not purged
+# like /scratch), with the same verl/ckpts/<project>/<experiment> layout as scratch.
+# NOTE: the base MODEL_PATH still points at /scratch/.../verl/models — the base
+# weights are not mirrored under /project, so only the checkpoints moved.
+CKPTS_DIR=${CKPTS_DIR:-"/project/aip-gberseth/homayoon/verl/ckpts/${project_name}/${experiment_name}"}
 # MODEL_PATH=${MODEL_PATH:-"/scratch/h/homayoon/verl/models/Qwen3-30B-A3B-Base"}
 TRAIN_FILE=${TRAIN_FILE:-"${DATA_ROOT}/data/dapo-math-17k.parquet"}
 TEST_FILE=${TEST_FILE:-"${DATA_ROOT}/data/aime-2024.parquet"}
@@ -141,7 +150,7 @@ train_batch_size=256
 ppo_mini_batch_size=32
 # H200-friendly defaults for this launcher; override with PPO_MICRO_BATCH_SIZE_PER_GPU if needed.
 ppo_micro_batch_size_per_gpu=${PPO_MICRO_BATCH_SIZE_PER_GPU:-$DEFAULT_PPO_MICRO_BATCH_SIZE_PER_GPU}
-n_resp_per_prompt=8 ### was 16
+n_resp_per_prompt=16 ### was 8
 n_resp_per_prompt_val=32
 
 # ===================================== Training ======================================
@@ -246,6 +255,20 @@ ACTOR_CONFIG="
     actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu"
+
+# Memory-efficient optimizer for the 30B MoE (matches the official
+# grpo_30b_a3b_base_math_megatron recipe). use_precision_aware_optimizer stores the
+# Adam states in reduced precision, roughly halving the ~366GB fp32 optimizer that
+# otherwise sits resident on the host and OOM-kills the first post-resume update_actor.
+# NOTE: checkpoints saved WITHOUT these are not load-compatible WITH them — use this
+# config for the whole run (from scratch + resume).
+if [[ "$IS_MOE_MODEL" == "true" ]]; then
+    ACTOR_CONFIG="$ACTOR_CONFIG \
+    +actor_rollout_ref.actor.optim.override_optimizer_config.use_precision_aware_optimizer=True \
+    +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_cpu_offload=True \
+    +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_offload_fraction=0.5 \
+    +actor_rollout_ref.actor.optim.override_optimizer_config.overlap_cpu_optimizer_d2h_h2d=True"
+fi
     # actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
     # actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$ppo_micro_batch_size_per_gpu \
     # actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$actor_max_token_len_per_gpu "
@@ -332,9 +355,9 @@ ROLLOUT_CONFIG="$ROLLOUT_CONFIG \
     actor_rollout_ref.rollout.val_kwargs.do_sample=True \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.95 \
     actor_rollout_ref.rollout.val_kwargs.top_k=-1 \
-    actor_rollout_ref.rollout.val_kwargs.temperature=1  \
+    actor_rollout_ref.rollout.val_kwargs.temperature=0.7  \
     actor_rollout_ref.rollout.val_kwargs.n=$n_resp_per_prompt_val"
-##### temperature was 0.7
+##### temperature was 1
 
 # ===================================== Reward =====================================
 REWARD_CONFIG="
@@ -374,13 +397,15 @@ python3 -m verl.trainer.main_ppo \
     trainer.nnodes=$NNODES \
     trainer.val_before_train=False \
     trainer.log_val_generations=100 \
-    trainer.save_freq=50 \
+    trainer.save_freq=20 \
     trainer.max_actor_ckpt_to_keep=1 \
     trainer.max_critic_ckpt_to_keep=1 \
     trainer.resume_mode=auto \
     trainer.test_freq=5 \
     trainer.total_epochs=10 \
     trainer.total_training_steps=200 \
+    actor_rollout_ref.actor.checkpoint.load_contents=['model','extra','hf_model','optimizer'] \
+    actor_rollout_ref.actor.checkpoint.save_contents=['model','extra','hf_model','optimizer'] \
     $ACTOR_CONFIG \
     $CIRITC_CONFIG \
     $ROLLOUT_CONFIG \

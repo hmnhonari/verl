@@ -16,9 +16,16 @@ module load httpproxy
 export WANDB_API_KEY=$(cat $HOME/.wandb_key)
 export WANDB_ENTITY=glen-berseth
 export HYDRA_FULL_ERROR=1
+# On checkpoint resume, load the megatron distributed optimizer without the
+# FullyParallel DP-collective exchange: each rank reads its own shards directly.
+# This removes the cross-rank NCCL exchange during load that, when one rank lags
+# or dies under memory pressure, cascades into the "Socket closed" /
+# "Connection reset" / ActorUnavailable failures seen on 30B resume.
+export VERL_DISABLE_FULLY_PARALLEL_LOAD=1
 # export LOSS_MODE=tvpo
 export LOSS_MODE=${1:-tvpo}
 export MODEL_MODE=${2:-4B}
+export CLIP_RATIO=${3:-0.015}
 
 # replace these information with your own
 verl_workdir=/home/h/homayoon/verl
@@ -30,7 +37,7 @@ apptainer_image_path=/scratch/h/homayoon/verl/verl.sif
 # On a single node, we just start the head. No need for IP detection or worker loops.
 echo "Starting Ray head on $(hostname)"
 srun --nodes=1 --ntasks=1 \
-   apptainer run --nv --bind $verl_workdir $apptainer_image_path \
+   apptainer run --nv --bind $verl_workdir --bind /project/aip-gberseth/homayoon $apptainer_image_path \
    ray start --head --port=6379 --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus=8 --block &
 
 # Wait a moment for Ray to initialize
@@ -41,5 +48,6 @@ cd $HOME/verl
 apptainer exec --nv \
     --bind /home/h/homayoon:/home/h/homayoon \
     --bind /scratch/h/homayoon:/scratch/h/homayoon \
+    --bind /project/aip-gberseth/homayoon:/project/aip-gberseth/homayoon \
     /scratch/h/homayoon/verl/verl.sif \
     bash /home/h/homayoon/verl/examples/dppo_trainer/run_qwen30b_dppo.sh

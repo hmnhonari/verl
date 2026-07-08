@@ -572,6 +572,16 @@ class MegatronEngine(BaseEngine):
         """
         if self._is_offload_param:
             load_megatron_model_to_gpu(self.module)
+        # Onload the optimizer to GPU *before* loading the distributed checkpoint. With
+        # optimizer_offload=True the optimizer is offloaded to host RAM at init; if it stays
+        # there, dist_checkpointing.load allocates the freshly-read copy on the host too, so
+        # resume transiently holds ~2x the optimizer in host RAM (init copy + loaded copy). For a
+        # 30B MoE distributed optimizer (~342GB) that 2x exceeds a single node's RAM and the OS
+        # OOM-kills a worker mid-load (surfacing as "Socket closed" / ActorUnavailable). The GPUs
+        # are nearly idle at load time (vLLM is asleep), so onloading first targets the read at
+        # GPU memory; the offload below returns it to host afterwards. Mirrors the model handling.
+        if self._is_offload_optimizer and self.optimizer is not None:
+            load_megatron_optimizer(self.optimizer)
         self.checkpoint_mananager.load_checkpoint(
             local_path=local_path, hdfs_path=hdfs_path, del_local_after_load=del_local_after_load
         )

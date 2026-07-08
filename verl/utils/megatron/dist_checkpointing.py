@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import megatron.core
 import torch
 from megatron.core import dist_checkpointing, mpu
@@ -56,9 +58,20 @@ def save_dist_checkpointing(
 def load_dist_checkpointing(sharded_state_dict, ckpt_dir):
     # Get checkpointing strategies
     load_strategy = get_default_load_sharded_strategy(ckpt_dir)
-    load_strategy = FullyParallelLoadStrategyWrapper(
-        load_strategy, mpu.get_data_parallel_group(with_context_parallel=True)
-    )
+    # FullyParallelLoadStrategyWrapper has each DP rank read a slice of the shards and then
+    # exchanges them across the DP group via NCCL broadcasts. On resume of a large (e.g. MoE)
+    # distributed optimizer this exchange adds a DP collective into the (slow, uneven) load
+    # path. The optimizer load already peaks at ~2x host RAM because dist_checkpointing.load
+    # allocates a full loaded copy alongside the resident offloaded optimizer; if that tips a
+    # worker into the OS OOM-killer, the in-flight collective on the surviving ranks turns the
+    # single death into a cluster-wide "Socket closed" / "Connection reset" / ActorUnavailable
+    # cascade (see the 30B resume failures). Setting VERL_DISABLE_FULLY_PARALLEL_LOAD=1 drops
+    # the wrapper so each rank loads its own shards directly: no DP collective during load, so a
+    # lagging/dead rank no longer cascades. (This does not by itself lower the ~2x peak.)
+    if os.environ.get("VERL_DISABLE_FULLY_PARALLEL_LOAD", "0").lower() not in ("1", "true", "yes"):
+        load_strategy = FullyParallelLoadStrategyWrapper(
+            load_strategy, mpu.get_data_parallel_group(with_context_parallel=True)
+        )
 
     # Fix torch.load weights only error
     try:
