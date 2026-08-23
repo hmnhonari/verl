@@ -83,6 +83,7 @@ verl is fast with:
    algo/rollout_corr_math.md
    algo/otb.md
    algo/dppo.md
+   algo/tvpo.md
    algo/opd.md
    algo/dro.md
 

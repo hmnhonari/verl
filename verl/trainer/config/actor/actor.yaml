@@ -79,6 +79,11 @@ policy_loss:
   # Must be set to a positive value when policy_loss.loss_mode is "dro".
   dro_beta: null
 
+  # Scope the TV divergence of the "tvpo" loss is estimated over: "prompt" or "batch".
+  # "prompt" additionally keeps every token of a prompt group that is still inside the
+  # trust region, and falls back to "batch" when no prompt grouping key is available.
+  tvpo_tv_scope: prompt
+
 # Constant C in Dual-clip PPO; clips when advantage < 0 and ratio > C
 clip_ratio_c: 3.0
 

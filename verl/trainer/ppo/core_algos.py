@@ -1457,6 +1457,150 @@ def compute_policy_loss_dppo_tv(
     return pg_loss, pg_metrics
 
 
+@register_policy_loss("tvpo")
+def compute_policy_loss_tvpo(
+    old_log_prob: torch.Tensor,
+    log_prob: torch.Tensor,
+    advantages: torch.Tensor,
+    response_mask: torch.Tensor,
+    loss_agg_mode: str = "token-mean",
+    config: Optional[ActorConfig] = None,
+    rollout_is_weights: torch.Tensor | None = None,
+    index: np.ndarray | torch.Tensor | list | None = None,
+) -> tuple[torch.Tensor, dict[str, Any]]:
+    """
+    Compute the policy objective and related metrics for TVPO (Total-Variation Policy Optimization).
+
+    TVPO is a variant of DPPO-Binary-TV (:func:`compute_policy_loss_dppo_tv`) that moves the trust
+    region from the individual token to the whole batch (or to the prompt group). Instead of
+    masking every token whose probability moved too far, TVPO first estimates how far the policy
+    has moved in total and only starts masking once that estimate leaves the trust region:
+
+    1. The realised total-variation distance is estimated from the importance ratio,
+       ``TV(pi, pi_old) = 0.5 * E_{a ~ pi_old}[|pi(a)/pi_old(a) - 1|]``, and compared against the
+       threshold ``clip_ratio / 2`` (``clip_ratio`` is the budget on the L1 distance
+       ``sum_a |pi(a|s) - pi_old(a|s)|``, which is twice the TV distance).
+    2. While the estimate is inside the trust region every token is updated, so TVPO does not pay
+       the optimisation cost of a per-token mask when the policy has barely moved.
+    3. Once the estimate leaves the trust region only the tokens whose update pushes the policy
+       *back* towards ``pi_old`` survive. The gradient of the surrogate w.r.t. ``log pi`` has the
+       sign of the advantage, so an update grows the divergence exactly when the advantage agrees
+       with the probability change that already happened; requiring
+       ``advantage * sign(pi - pi_old) <= 0`` keeps only the tokens that shrink it.
+
+    With ``policy_loss.tvpo_tv_scope="prompt"`` (the default) the divergence is additionally
+    estimated per prompt group (``index``), and a group that is still inside the trust region keeps
+    all of its tokens even when the batch as a whole has left it. With ``"batch"``, or when no
+    grouping key is available, a single batch-level estimate is used.
+
+    Note that the estimate is computed over the local micro-batch, so - like the per-token masks of
+    the other trust-region losses - it is not synchronised across data-parallel ranks.
+
+    Args:
+        old_log_prob (torch.Tensor):
+            Log-probabilities of actions under the old policy, shape (batch_size, response_length).
+        log_prob (torch.Tensor):
+            Log-probabilities of actions under the current policy, shape (batch_size, response_length).
+        advantages (torch.Tensor):
+            Advantage estimates for each action, shape (batch_size, response_length).
+        response_mask (torch.Tensor):
+            Mask indicating which tokens to include in the loss, shape (batch_size, response_length).
+        loss_agg_mode (str, optional):
+            Aggregation mode for `agg_loss`. Defaults to "token-mean".
+        config: `(verl.trainer.config.ActorConfig)`:
+            config for the actor.
+        rollout_is_weights (torch.Tensor, optional):
+            rollout correction weights, shape (batch_size, response_length).
+        index (optional):
+            Prompt grouping key (one label per sequence), used when
+            ``policy_loss.tvpo_tv_scope`` is "prompt". Defaults to None.
+    """
+
+    assert config is not None
+    assert not isinstance(config, AlgoConfig)
+    # Note: the clip_ratio is different from the standard PPO, it is the L1 divergence budget.
+    # The TV divergence is half of the L1 distance, hence the threshold below.
+    clip_divergence = config.clip_ratio / 2
+
+    policy_loss_config = config.get("policy_loss", None)
+    tv_scope = "prompt" if policy_loss_config is None else policy_loss_config.get("tvpo_tv_scope", "prompt")
+    if tv_scope not in ("prompt", "batch"):
+        raise ValueError(f"Unsupported policy_loss.tvpo_tv_scope: {tv_scope}. Supported values are 'prompt', 'batch'.")
+
+    negative_approx_kl = log_prob - old_log_prob
+    # Clamp negative_approx_kl for stability
+    negative_approx_kl = torch.clamp(negative_approx_kl, min=-20.0, max=20.0)
+    ratio = torch.exp(negative_approx_kl)
+    ppo_kl = verl_F.masked_mean(-negative_approx_kl, response_mask)
+
+    # The divergence estimate only gates the mask below, it never carries gradient, so keep it out
+    # of the autograd graph. It is reduced over the batch, so accumulate it in fp32 even when the
+    # log-probs are half precision.
+    tv_per_token = (ratio - 1.0).abs().detach().float() / 2
+
+    prompt_index = None
+    if tv_scope == "prompt" and index is not None:
+        prompt_index = as_torch_index(index, device=log_prob.device)
+        if prompt_index.numel() != log_prob.shape[0]:
+            # The grouping key does not line up with the micro-batch; fall back to batch scope.
+            prompt_index = None
+
+    prompt_tv_per_sample = None
+    if prompt_index is None:
+        ppo_tv = verl_F.masked_mean(tv_per_token, response_mask)
+    else:
+        per_sample_tv = verl_F.masked_mean(tv_per_token, response_mask, axis=-1)
+        # Sequences without a single scored token contribute no evidence and must not
+        # dilute the average of their group (e.g. padding sequences added to the batch).
+        sample_weight = (response_mask.sum(dim=-1) > 0).to(per_sample_tv.dtype)
+        num_groups = int(prompt_index.max().item()) + 1
+        zeros = torch.zeros(num_groups, dtype=per_sample_tv.dtype, device=per_sample_tv.device)
+        group_tv_sum = zeros.index_add(0, prompt_index, per_sample_tv * sample_weight)
+        group_count = zeros.index_add(0, prompt_index, sample_weight)
+        group_tv = group_tv_sum / group_count.clamp_min(1.0)
+        prompt_tv_per_sample = group_tv[prompt_index]
+        non_empty_group = group_count > 0
+        ppo_tv = (group_tv * non_empty_group).sum() / non_empty_group.sum().clamp_min(1)
+
+    # Instead of dual-clip PPO, we use truncated importance sampling (TIS) to clip the policy loss.
+    # However, a large threshold is recommended to avoid performance degradation due to the truncation bias.
+    # See Section 5.4 in https://arxiv.org/pdf/2602.04879 for more details.
+    clip_ratio_c = config.get("clip_ratio_c", 20.0)
+    truncated_ratio = torch.clamp(ratio, max=clip_ratio_c)
+    truncated_ratio = truncated_ratio.detach()
+
+    # A token is updated when the divergence estimate that governs it is inside the trust region,
+    # or when its update moves the policy back towards the old one.
+    # sign(pi - pi_old) == sign(log pi - log pi_old), and the log-space form stays exact when both
+    # probabilities are small enough for the difference of probabilities to lose all its digits.
+    token_valid = (advantages * torch.sign(negative_approx_kl)) <= 0
+    valid_mask = (ppo_tv <= clip_divergence) | token_valid
+    if prompt_tv_per_sample is not None:
+        valid_mask = valid_mask | (prompt_tv_per_sample.unsqueeze(-1) <= clip_divergence)
+    valid_mask = valid_mask.detach().float()
+
+    pg_losses = -advantages * truncated_ratio * log_prob * valid_mask
+
+    # Apply rollout correction weights if provided
+    if rollout_is_weights is not None:
+        pg_losses = pg_losses * rollout_is_weights
+
+    pg_loss = agg_loss(
+        loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode, **config.global_batch_info
+    )
+
+    pg_clipfrac = verl_F.masked_mean((1.0 - valid_mask).float(), response_mask)
+    pg_clipfrac_lower = verl_F.masked_mean((ratio > clip_ratio_c).float() * valid_mask, response_mask)
+
+    pg_metrics = {
+        "actor/pg_clipfrac": pg_clipfrac.detach().item(),
+        "actor/ppo_kl": ppo_kl.detach().item(),
+        "actor/ppo_tv": ppo_tv.detach().item(),
+        "actor/pg_clipfrac_lower": pg_clipfrac_lower.detach().item(),
+    }
+    return pg_loss, pg_metrics
+
+
 @register_policy_loss("dppo_kl")
 def compute_policy_loss_dppo_kl(
     old_log_prob: torch.Tensor,

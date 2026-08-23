@@ -13,6 +13,9 @@
 # limitations under the License.
 
 
+import inspect
+from functools import cache
+
 import torch
 from tensordict import TensorDict
 
@@ -23,6 +26,12 @@ from verl.utils.metric import AggregationType, Metric
 from verl.utils.torch_functional import masked_mean, masked_sum
 from verl.workers.config import ActorConfig, CriticConfig
 from verl.workers.utils.padding import no_padding_2_padding
+
+
+@cache
+def _accepts_prompt_index(policy_loss_fn) -> bool:
+    """Whether a registered policy loss declares the prompt-grouping ``index`` argument."""
+    return "index" in inspect.signature(policy_loss_fn).parameters
 
 
 def sft_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None):
@@ -82,6 +91,16 @@ def ppo_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None)
 
     metrics = {}
 
+    loss_agg_mode = config.loss_agg_mode
+    loss_mode = config.policy_loss.get("loss_mode", "vanilla")
+    policy_loss_fn = get_policy_loss_fn(loss_mode)
+
+    # Prompt-grouping key for policy losses that aggregate over a prompt's rollouts (e.g. tvpo).
+    # It has to be read before the `select` below drops it, and is only read for losses that
+    # declare the argument so that externally registered policy losses keep working unchanged.
+    accepts_index = _accepts_prompt_index(policy_loss_fn)
+    index = tu.get(data, "uid", None) if accepts_index else None
+
     # select fields and convert to padded tensor
     fields = ["response_mask", "old_log_probs", "advantages"]
     if "rollout_is_weights" in data:
@@ -96,20 +115,18 @@ def ppo_loss(config: ActorConfig, model_output, data: TensorDict, dp_group=None)
     advantages = data["advantages"]
     rollout_is_weights = data.get("rollout_is_weights", None)
 
-    loss_agg_mode = config.loss_agg_mode
-
-    loss_mode = config.policy_loss.get("loss_mode", "vanilla")
-
-    policy_loss_fn = get_policy_loss_fn(loss_mode)
-    pg_loss, pg_metrics = policy_loss_fn(
-        old_log_prob=old_log_prob,
-        log_prob=log_prob,
-        advantages=advantages,
-        response_mask=response_mask,
-        loss_agg_mode=loss_agg_mode,
-        config=config,
-        rollout_is_weights=rollout_is_weights,
-    )
+    policy_loss_kwargs = {
+        "old_log_prob": old_log_prob,
+        "log_prob": log_prob,
+        "advantages": advantages,
+        "response_mask": response_mask,
+        "loss_agg_mode": loss_agg_mode,
+        "config": config,
+        "rollout_is_weights": rollout_is_weights,
+    }
+    if accepts_index:
+        policy_loss_kwargs["index"] = index
+    pg_loss, pg_metrics = policy_loss_fn(**policy_loss_kwargs)
 
     # AggregationType.MEAN for pg metrics: assumes policy_loss_fn normalizes by local_bsz/local_tokens
     # Ex: in compute_policy_loss_vanilla, pg_metrics are pg_clipfrac, ppo_kl, pg_clipfrac_lower

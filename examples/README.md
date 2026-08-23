@@ -111,6 +111,7 @@ under `recipe/` instead.
 | `reinforce_plus_plus_trainer/`     | REINFORCE++ / baseline         | `adv_estimator=reinforce_plus_plus[_baseline]`      |
 | `cispo_trainer/`                   | CISPO                          | `loss_mode=cispo`                                   |
 | `dppo_trainer/`                    | DPPO (TV / KL variants)        | `loss_mode=dppo_tv \| dppo_kl`                      |
+| `tvpo_trainer/`                    | TVPO (batch/prompt TV region)  | `loss_mode=tvpo`                                    |
 | `gdpo_trainer/`                    | GDPO                           | `adv_estimator=gdpo`                                |
 | `gmpo_trainer/`                    | GMPO                           | `loss_mode=geo_mean`                                |
 | `gpg_trainer/`                     | GPG                            | `adv_estimator=gpg`, `loss_mode=gpg`                |

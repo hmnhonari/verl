@@ -121,6 +121,7 @@ actor_rollout_ref:
       kl_cov_ratio: 0.0002
       ppo_kl_coef: 0.1
       dro_beta: null
+      tvpo_tv_scope: prompt
     clip_ratio_c: 3.0
     loss_agg_mode: token-mean
     loss_scale_factor: null

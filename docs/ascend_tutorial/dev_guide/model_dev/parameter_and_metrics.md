@@ -70,7 +70,7 @@ verl 通过层级化的 YAML 配置文件管理所有参数，涉及到的所有
 
 | 参数名 | 默认值 | 说明 |
 |--------|--------|------|
-| `actor_rollout_ref.actor.policy_loss.loss_mode` | `vanilla` | 策略损失模式，可选 vanilla、clip_cov、kl_cov、dppo_tv、dppo_kl、gspo、sapo、geo_mean、cispo、gpg、bypass_mode、reinforce_is 等 |
+| `actor_rollout_ref.actor.policy_loss.loss_mode` | `vanilla` | 策略损失模式，可选 vanilla、clip_cov、kl_cov、dppo_tv、dppo_kl、tvpo、gspo、sapo、geo_mean、cispo、gpg、bypass_mode、reinforce_is 等 |
 | `actor_rollout_ref.actor.policy_loss.clip_cov_ratio` | `0.0002` | clip_cov 模式的协方差比率 |
 | `actor_rollout_ref.actor.policy_loss.clip_cov_lb` | `1.0` | clip_cov 模式的协方差下界 |
 | `actor_rollout_ref.actor.policy_loss.clip_cov_ub` | `5.0` | clip_cov 模式的协方差上界 |

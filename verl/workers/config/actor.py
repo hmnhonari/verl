@@ -80,14 +80,17 @@ class PolicyLossConfig(BaseConfig):
     The inheritance from BaseConfig provides omegaconf.DictConfig-like interface for a dataclass config.
 
     Args:
-        loss_mode (str): Registered policy loss name. Options: 'vanilla', 'dppo_tv', 'dppo_kl', 'gspo', 'sapo',
-            'gpg', 'clip_cov', 'kl_cov', 'geo_mean', 'dro', 'cispo', and 'bypass_mode'.
+        loss_mode (str): Registered policy loss name. Options: 'vanilla', 'dppo_tv', 'dppo_kl', 'tvpo', 'gspo',
+            'sapo', 'gpg', 'clip_cov', 'kl_cov', 'geo_mean', 'dro', 'cispo', and 'bypass_mode'.
         clip_cov_ratio (float): Ratio of tokens to be clipped for clip-cov loss.
         clip_cov_lb (float): Lower bound for clip-cov loss.
         clip_cov_ub (float): Upper bound for clip-cov loss.
         kl_cov_ratio (float): Ratio of tokens to be applied KL penalty for kl-cov loss.
         ppo_kl_coef (float): KL divergence penalty coefficient.
         dro_beta (Optional[float]): Quadratic log-ratio penalty for DRO. Required when loss_mode is 'dro'.
+        tvpo_tv_scope (str): Scope the TV divergence of the 'tvpo' loss is estimated over.
+            Options: 'prompt' (per prompt group, falling back to 'batch' when no grouping key is
+            available) and 'batch' (a single estimate over the micro-batch).
         rollout_correction (RolloutCorrectionConfig): Configuration for rollout correction.
     """
 
@@ -98,7 +101,16 @@ class PolicyLossConfig(BaseConfig):
     kl_cov_ratio: float = 0.0002
     ppo_kl_coef: float = 0.1
     dro_beta: Optional[float] = None
+    tvpo_tv_scope: str = "prompt"
     rollout_correction: RolloutCorrectionConfig = field(default_factory=RolloutCorrectionConfig)
+
+    def __post_init__(self):
+        """Validate policy loss configuration."""
+        valid_tvpo_tv_scopes = ["prompt", "batch"]
+        if self.tvpo_tv_scope not in valid_tvpo_tv_scopes:
+            raise ValueError(
+                f"Invalid policy_loss.tvpo_tv_scope: {self.tvpo_tv_scope}. Must be one of {valid_tvpo_tv_scopes}"
+            )
 
 
 @dataclass
